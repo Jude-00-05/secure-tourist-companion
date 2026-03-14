@@ -56,7 +56,7 @@ interface AuditEntry {
     type: string;
     name: string;
   };
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   ipAddress: string;
   userAgent: string;
 }

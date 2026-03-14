@@ -36,6 +36,37 @@ import usersData from '@/data/users.json';
 import incidentsData from '@/data/incidents.json';
 import { simulateBreach, onAlert, onIncident, type Alert, type Incident } from '@/services/events/geofenceEngine';
 
+interface User {
+  id: string;
+  address: string;
+  name: string;
+  passport: string;
+  country: string;
+  status: string;
+  photo: string;
+  validFrom: string;
+  validUntil: string;
+  emergencyContact: { name: string; phone: string; relation: string };
+  tripDetails: { destination: string; arrivalDate: string; departureDate: string; purpose: string };
+  location: { lat: number; lng: number };
+}
+
+interface Geofence {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  enabled: boolean;
+  color: string;
+  vertices: { lat: number; lng: number }[];
+  center: { lat: number; lng: number };
+  autoNotify: boolean;
+  notifyOnEntry: boolean;
+  notifyOnExit: boolean;
+  contacts: string[];
+  activeIncidents: number;
+}
+
 interface TouristMarker {
   id: string;
   name: string;
@@ -57,7 +88,7 @@ export default function ControlRoom() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
   // Transform user data to tourist markers with risk scores
-  const tourists: TouristMarker[] = (usersData as any[]).map(user => ({
+  const tourists: TouristMarker[] = (usersData as User[]).map(user => ({
     id: user.id,
     name: user.name,
     status: user.status,
@@ -66,8 +97,8 @@ export default function ControlRoom() {
   }));
 
   const highRiskTourists = tourists.filter(t => t.riskScore > 50);
-  const activeIncidents = (incidentsData as any[]).filter(i => i.status !== 'resolved');
-  const geofences = geofencesData as any[];
+  const activeIncidents = (incidentsData as Incident[]).filter(i => i.status !== 'resolved');
+  const geofences = geofencesData as Geofence[];
 
   // Subscribe to live events
   useEffect(() => {
@@ -421,7 +452,7 @@ export default function ControlRoom() {
               <CardContent>
                 <ScrollArea className="h-[180px]">
                   <div className="space-y-2">
-                    {activeIncidents.map((incident: any) => (
+                    {activeIncidents.map((incident: Incident) => (
                       <div
                         key={incident.id}
                         className="p-2 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
@@ -465,7 +496,7 @@ export default function ControlRoom() {
               <CardContent>
                 <ScrollArea className="h-[150px]">
                   <div className="space-y-2">
-                    {geofences.slice(0, 4).map((fence: any) => (
+                    {geofences.slice(0, 4).map((fence: Geofence) => (
                       <div key={fence.id} className="flex items-center justify-between p-2 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <span 
