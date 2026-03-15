@@ -36,6 +36,50 @@ npm i
 npm run dev
 ```
 
+## EmailJS Setup for Emergency Dispatch
+
+This app uses EmailJS to send real emergency dispatch emails. To enable email functionality:
+
+### 1. Create EmailJS Account
+1. Go to [https://www.emailjs.com/](https://www.emailjs.com/)
+2. Sign up for a free account
+3. Verify your email
+
+### 2. Set up Email Service
+1. In your EmailJS dashboard, go to **Email Services**
+2. Add a new service (Gmail, Outlook, etc.)
+3. Connect your email account and verify
+
+### 3. Create Email Template
+1. Go to **Email Templates** in your dashboard
+2. Create a new template with these variables:
+   - `{{subject}}` - Email subject
+   - `{{message}}` - Email body
+   - `{{incident_id}}` - Incident ID
+   - `{{team_type}}` - Response team type
+   - `{{priority}}` - Alert priority
+   - `{{timestamp}}` - Dispatch timestamp
+3. **Important**: Set the recipient email directly in the template (To Email field) to `alwinsunnyjude@gmail.com`
+4. Do NOT use `{{to_email}}` variable - EmailJS doesn't allow dynamic recipients for security reasons
+
+### 4. Configure Environment Variables
+1. Copy `.env.example` to `.env.local`
+2. Fill in your EmailJS credentials:
+   ```
+   VITE_EMAILJS_SERVICE_ID=your_service_id_here
+   VITE_EMAILJS_TEMPLATE_ID=your_template_id_here
+   VITE_EMAILJS_PUBLIC_KEY=your_public_key_here
+   ```
+
+### 5. Test Email Dispatch
+1. Start the app: `npm run dev`
+2. Go to Safety Alerts page
+3. Click "Dispatch" on any incident
+4. Select response teams and dispatch
+5. Check your email for the emergency alert
+
+**Note**: Free EmailJS accounts have monthly limits. For production use, consider upgrading or using a dedicated email service.
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).

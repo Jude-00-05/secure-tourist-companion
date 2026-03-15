@@ -5,3 +5,4 @@ export * from './types';
 export * from './client';
 export * from './kyc.service';
 export * from './admin.service';
+export * from './email.service';

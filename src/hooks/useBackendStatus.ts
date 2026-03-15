@@ -12,7 +12,7 @@ interface BackendStatus {
   error: string | null;
 }
 
-export function useBackendStatus(autoCheck = true, interval = 30000) {
+export function useBackendStatus(autoCheck = false, interval = 30000) {
   const [status, setStatus] = useState<BackendStatus>({
     connected: false,
     ipfs: 'unknown',
@@ -54,7 +54,7 @@ export function useBackendStatus(autoCheck = true, interval = 30000) {
         blockchain: 'unknown',
         lastChecked: new Date(),
         loading: false,
-        error: 'Failed to connect to backend',
+        error: 'Backend unavailable (expected - no backend running)',
       });
     }
   }, []);

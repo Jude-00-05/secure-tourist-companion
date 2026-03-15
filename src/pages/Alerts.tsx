@@ -32,11 +32,14 @@ import {
   Check,
   Phone,
   Ambulance,
+  Loader2,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import incidentsData from "@/data/incidents.json";
 import geofencesData from "@/data/geofences.json";
+import { sendDispatchEmail, generateDispatchEmailContent } from "@/services/api/email.service";
 
 interface Incident {
   id: string;
@@ -62,6 +65,7 @@ const severityColors: Record<string, string> = {
 const statusColors: Record<string, string> = {
   reported: "bg-destructive/10 text-destructive border-destructive/20",
   assigned: "bg-warning/10 text-warning border-warning/20",
+  dispatched: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   responding: "bg-accent/10 text-accent border-accent/20",
   resolved: "bg-success/10 text-success border-success/20",
 };
@@ -73,12 +77,14 @@ export default function Alerts() {
   
   const initialFilter = (location.state as { filter?: string })?.filter || "all";
   
-  const [incidents] = useState<Incident[]>(incidentsData as Incident[]);
+  const [incidents, setIncidents] = useState<Incident[]>(incidentsData as Incident[]);
   const [severityFilter, setSeverityFilter] = useState(initialFilter);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
+  const [isDispatching, setIsDispatching] = useState(false);
 
   const filteredIncidents = incidents.filter((incident) => {
     const matchesSeverity = severityFilter === "all" || incident.severity === severityFilter;
@@ -98,13 +104,75 @@ export default function Alerts() {
     setShowDispatchModal(true);
   };
 
-  const handleConfirmDispatch = () => {
-    toast({
-      title: "Emergency Dispatched",
-      description: "Responders have been notified and are en route.",
-    });
-    setShowDispatchModal(false);
-    setSelectedIncident(null);
+  const handleConfirmDispatch = async () => {
+    if (!selectedIncident || selectedTeams.length === 0) {
+      toast({
+        title: "No Teams Selected",
+        description: "Please select at least one response team.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDispatching(true);
+
+    try {
+      // Send emails to all selected teams
+      const emailPromises = selectedTeams.map(async (teamType) => {
+        const emailData = generateDispatchEmailContent(selectedIncident, teamType);
+        return await sendDispatchEmail(emailData);
+      });
+
+      const emailResults = await Promise.all(emailPromises);
+
+      // Check if all emails were sent successfully
+      const failedEmails = emailResults.filter(result => !result.success);
+
+      if (failedEmails.length > 0) {
+        toast({
+          title: "Partial Dispatch Success",
+          description: `${selectedTeams.length - failedEmails.length} teams notified. ${failedEmails.length} failed.`,
+          variant: "destructive",
+        });
+      } else {
+        // Update incident status to dispatched
+        setIncidents(prevIncidents =>
+          prevIncidents.map(incident =>
+            incident.id === selectedIncident.id
+              ? {
+                  ...incident,
+                  status: "dispatched",
+                  timeline: [
+                    ...incident.timeline,
+                    {
+                      time: new Date().toISOString(),
+                      event: `Dispatched ${selectedTeams.join(", ")} teams`
+                    }
+                  ]
+                }
+              : incident
+          )
+        );
+
+        toast({
+          title: "Emergency Dispatched Successfully",
+          description: `${selectedTeams.join(", ")} teams have been notified and are en route.`,
+        });
+      }
+
+      setShowDispatchModal(false);
+      setSelectedIncident(null);
+      setSelectedTeams([]);
+    } catch (error) {
+      console.error("Dispatch error:", error);
+      toast({
+        title: "Dispatch Failed",
+        description: "An error occurred while dispatching teams. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDispatching(false);
+    }
   };
 
   const handleAcknowledge = (incident: Incident) => {
@@ -308,6 +376,7 @@ export default function Alerts() {
                       <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="reported">Reported</SelectItem>
                       <SelectItem value="assigned">Assigned</SelectItem>
+                      <SelectItem value="dispatched">Dispatched</SelectItem>
                       <SelectItem value="responding">Responding</SelectItem>
                       <SelectItem value="resolved">Resolved</SelectItem>
                     </SelectContent>
@@ -359,29 +428,71 @@ export default function Alerts() {
               </div>
 
               <div className="space-y-3">
-                <Label>Select Response Team</Label>
+                <Label>Select Response Team(s)</Label>
                 <div className="space-y-2">
-                  {["Medical Team Alpha", "Security Unit 3", "Tourist Police"].map((team) => (
-                    <label
-                      key={team}
-                      className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted"
-                    >
-                      <input type="checkbox" className="rounded" defaultChecked={team === "Medical Team Alpha"} />
-                      <span className="text-sm text-foreground">{team}</span>
-                    </label>
-                  ))}
+                  {[
+                    { id: "medical", name: "Medical Team", icon: Ambulance },
+                    { id: "police", name: "Tourist Police", icon: Phone },
+                    { id: "security", name: "Security Unit", icon: Shield }
+                  ].map((team) => {
+                    const IconComponent = team.icon;
+                    return (
+                      <label
+                        key={team.id}
+                        className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTeams.includes(team.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTeams(prev => [...prev, team.id]);
+                            } else {
+                              setSelectedTeams(prev => prev.filter(t => t !== team.id));
+                            }
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <IconComponent className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground">{team.name}</span>
+                      </label>
+                    );
+                  })}
                 </div>
+                {selectedTeams.length === 0 && (
+                  <p className="text-xs text-destructive">Please select at least one team</p>
+                )}
               </div>
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDispatchModal(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDispatchModal(false);
+                setSelectedTeams([]);
+              }}
+              disabled={isDispatching}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDispatch}>
-              <Phone className="w-4 h-4 mr-2" />
-              Dispatch Now
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDispatch}
+              disabled={isDispatching || selectedTeams.length === 0}
+            >
+              {isDispatching ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Dispatching...
+                </>
+              ) : (
+                <>
+                  <Phone className="w-4 h-4 mr-2" />
+                  Dispatch Now
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
